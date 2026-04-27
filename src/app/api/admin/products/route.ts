@@ -10,16 +10,39 @@ import { parseAdminProductImageUrl } from "@/lib/product-image-validation";
 
 type ProductErrorField = "uploadedImage" | "imageUrl" | "slug" | "unknown";
 
-function toNumber(value: FormDataEntryValue | null) {
+type ProductRequestPayload = {
+  name?: unknown;
+  slug?: unknown;
+  description?: unknown;
+  price?: unknown;
+  compare_at_price?: unknown;
+  stock?: unknown;
+  status?: unknown;
+  category_id?: unknown;
+  imageUrl?: unknown;
+  image_url?: unknown;
+};
+
+function toNumber(value: unknown) {
   const parsed = Number(value ?? 0);
 
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getOptionalImageUrl(formData: FormData) {
-  const imageUrl = formData.get("imageUrl") ?? formData.get("image_url");
+function getOptionalImageUrl(payload: ProductRequestPayload) {
+  const imageUrl = payload.imageUrl ?? payload.image_url;
 
   return parseAdminProductImageUrl(typeof imageUrl === "string" ? imageUrl : "");
+}
+
+async function getProductJsonPayload(request: Request) {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    throw new Error("Product API only accepts application/json.");
+  }
+
+  return (await request.json()) as ProductRequestPayload;
 }
 
 function productError(
@@ -54,25 +77,25 @@ function getProductErrorField(message: string): ProductErrorField {
 export async function POST(request: Request) {
   try {
     await requireAdminFromRequest(request);
-    const formData = await request.formData();
+    const payload = await getProductJsonPayload(request);
 
     const input: AdminProductFormPayload = {
-      name: String(formData.get("name") ?? "").trim(),
-      slug: String(formData.get("slug") ?? "").trim(),
-      description: String(formData.get("description") ?? "").trim(),
-      price: toNumber(formData.get("price")),
+      name: String(payload.name ?? "").trim(),
+      slug: String(payload.slug ?? "").trim(),
+      description: String(payload.description ?? "").trim(),
+      price: toNumber(payload.price),
       compare_at_price: (() => {
-        const raw = String(formData.get("compare_at_price") ?? "").trim();
+        const raw = payload.compare_at_price;
 
-        return raw ? toNumber(raw) : null;
+        return raw == null || raw === "" ? null : toNumber(raw);
       })(),
-      stock: Math.max(0, Math.trunc(toNumber(formData.get("stock")))),
-      status: String(formData.get("status") ?? "draft") as
+      stock: Math.max(0, Math.trunc(toNumber(payload.stock))),
+      status: String(payload.status ?? "draft") as
         | "draft"
         | "active"
         | "archived",
-      category_id: String(formData.get("category_id") ?? ""),
-      image_url: getOptionalImageUrl(formData),
+      category_id: String(payload.category_id ?? ""),
+      image_url: getOptionalImageUrl(payload),
     };
 
     if (!input.name) {

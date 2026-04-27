@@ -21,7 +21,13 @@ export async function createAdminProductImageUploadTarget({
   folderName: string;
   size: number;
 }) {
-  validateAdminProductImageMetadata({ contentType, fileName, size });
+  const normalizedContentType = getProductImageContentType(fileName, contentType);
+
+  validateAdminProductImageMetadata({
+    contentType: normalizedContentType,
+    fileName,
+    size,
+  });
   const supabase = createServiceRoleSupabaseClient();
 
   if (!supabase) {
@@ -35,7 +41,6 @@ export async function createAdminProductImageUploadTarget({
   }
 
   const safeFileName = sanitizeProductImageFileName(fileName);
-  const normalizedContentType = getProductImageContentType(fileName, contentType);
   const safeFolderName = sanitizeProductImageFolderName(folderName);
   const filePath = `${safeFolderName}/${Date.now()}-${randomUUID()}-${safeFileName}`;
   const { data: signedUpload, error: signedUploadError } = await supabase.storage
@@ -56,6 +61,7 @@ export async function createAdminProductImageUploadTarget({
     return {
       path: signedUpload.path,
       publicUrl: parseAdminProductImageUrl(data.publicUrl),
+      signedUrl: signedUpload.signedUrl,
       token: signedUpload.token,
       contentType: normalizedContentType,
     };

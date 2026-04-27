@@ -33,6 +33,18 @@ type UploadTarget = {
   token: string;
 };
 
+type ProductSavePayload = {
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  compare_at_price: number | null;
+  stock: number;
+  status: "draft" | "active" | "archived";
+  category_id: string;
+  imageUrl?: string;
+};
+
 function centsToDollars(cents: number | null | undefined) {
   if (cents == null) {
     return "";
@@ -49,12 +61,20 @@ function getStageErrorMessage(stage: SaveProductStage, error: unknown) {
       return "Form validation failed: Image URL fallback must be a valid https URL.";
     }
 
+    if (rawMessage.includes("Image must be under 5MB")) {
+      return "Image must be under 5MB.";
+    }
+
     return rawMessage
       ? `Form validation failed: ${rawMessage}`
       : "Form validation failed.";
   }
 
   if (stage === "create-upload-url") {
+    if (rawMessage.includes("Image must be under 5MB")) {
+      return "Image must be under 5MB.";
+    }
+
     if (rawMessage.includes("Product image bucket is not configured")) {
       return "Could not prepare image upload: Product image bucket is not configured.";
     }
@@ -63,7 +83,7 @@ function getStageErrorMessage(stage: SaveProductStage, error: unknown) {
   }
 
   if (stage === "upload-to-supabase") {
-    return "Image upload failed.";
+    return "Image upload failed. Please try again.";
   }
 
   if (stage === "create-product") {
@@ -83,19 +103,17 @@ function getStageErrorMessage(stage: SaveProductStage, error: unknown) {
 
 async function createProductImageUploadTarget(
   file: File,
-  folder: string,
 ): Promise<UploadTarget> {
   const contentType = getProductImageContentType(file.name, file.type);
 
-  const response = await fetch("/api/admin/product-images/create-upload-url", {
+  const response = await fetch("/api/admin/product-images/sign-upload", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       contentType,
-      filename: file.name,
-      folder,
+      fileName: file.name,
       size: file.size,
     }),
   });
@@ -123,7 +141,7 @@ async function uploadProductImageToSupabase(target: UploadTarget, file: File) {
   const contentType = getProductImageContentType(file.name, file.type);
 
   if (!supabase) {
-    throw new Error("Image upload failed.");
+    throw new Error("Image upload failed. Please try again.");
   }
 
   const { error: uploadError } = await supabase.storage
@@ -133,7 +151,7 @@ async function uploadProductImageToSupabase(target: UploadTarget, file: File) {
     });
 
   if (uploadError) {
-    throw new Error("Image upload failed.");
+    throw new Error("Image upload failed. Please try again.");
   }
 }
 
@@ -179,8 +197,8 @@ export function ProductForm({
     } catch (validationError) {
       setError(
         validationError instanceof Error
-          ? `Uploaded image: ${validationError.message}`
-          : "Uploaded image: Image upload failed. Please try another file.",
+          ? validationError.message
+          : "Image upload failed. Please try again.",
       );
       event.target.value = "";
       setSelectedFile(null);
@@ -198,7 +216,7 @@ export function ProductForm({
     try {
       setImagePreview(URL.createObjectURL(file));
     } catch {
-      setError("Uploaded image: Image upload failed. Please try another file.");
+      setError("Image upload failed. Please try again.");
       event.target.value = "";
       setSelectedFile(null);
       setImagePreview(primaryImage ?? null);
@@ -229,10 +247,7 @@ export function ProductForm({
       if (selectedFile) {
         stage = "create-upload-url";
         console.debug("admin product save stage", stage);
-        const uploadTarget = await createProductImageUploadTarget(
-          selectedFile,
-          product?.id || String(formData.get("slug") ?? "product-image"),
-        );
+        const uploadTarget = await createProductImageUploadTarget(selectedFile);
         console.debug("admin product image upload target", {
           hasPath: Boolean(uploadTarget.path),
           hasPublicUrl: Boolean(uploadTarget.publicUrl),
@@ -248,26 +263,28 @@ export function ProductForm({
         });
       }
 
-      const payload = new FormData();
-      payload.set("name", String(formData.get("name") ?? ""));
-      payload.set("slug", String(formData.get("slug") ?? ""));
-      payload.set("description", String(formData.get("description") ?? ""));
-      payload.set("price", String(price));
-      payload.set(
-        "compare_at_price",
-        compareAtPrice == null ? "" : String(compareAtPrice),
-      );
-      payload.set("stock", String(Number(formData.get("stock") ?? 0)));
-      payload.set("status", String(formData.get("status") ?? "draft"));
-      payload.set("category_id", String(formData.get("category_id") ?? ""));
+      const payload: ProductSavePayload = {
+        name: String(formData.get("name") ?? ""),
+        slug: String(formData.get("slug") ?? ""),
+        description: String(formData.get("description") ?? ""),
+        price,
+        compare_at_price: compareAtPrice,
+        stock: Number(formData.get("stock") ?? 0),
+        status: String(formData.get("status") ?? "draft") as
+          | "draft"
+          | "active"
+          | "archived",
+        category_id: String(formData.get("category_id") ?? ""),
+      };
+
       if (imageUrl) {
-        payload.set("imageUrl", imageUrl);
+        payload.imageUrl = imageUrl;
       }
 
       console.debug("admin product submit", {
-        fields: Array.from(payload.keys()),
+        fields: Object.keys(payload),
         imageMode: selectedFile ? "upload" : imageUrl ? "fallback-url" : "none",
-        sendsFallbackImageUrl: payload.has("imageUrl"),
+        sendsImageUrl: Boolean(payload.imageUrl),
         sendsUploadedImage: false,
       });
 
@@ -277,7 +294,10 @@ export function ProductForm({
         product ? `/api/admin/products/${product.id}` : "/api/admin/products",
         {
           method: product ? "PUT" : "POST",
-          body: payload,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
       );
       const result = (await response.json()) as {

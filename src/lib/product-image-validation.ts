@@ -63,13 +63,14 @@ export function validateAdminProductImageMetadata({
   size: number;
 }) {
   const extension = getProductImageExtension(fileName);
+  const normalizedContentType = getProductImageContentType(fileName, contentType);
 
-  if (!extension || !ALLOWED_IMAGE_TYPES.has(contentType)) {
+  if (!extension || !ALLOWED_IMAGE_TYPES.has(normalizedContentType)) {
     throw new Error("Only JPG, PNG, and WEBP images are supported.");
   }
 
   if (size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
-    throw new Error("Image must be smaller than 5MB.");
+    throw new Error("Image must be under 5MB.");
   }
 }
 
@@ -105,6 +106,6 @@ export function validateAdminProductImage(file: File | null) {
   }
 
   if (file.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
-    throw new Error("Image must be smaller than 5MB.");
+    throw new Error("Image must be under 5MB.");
   }
 }
