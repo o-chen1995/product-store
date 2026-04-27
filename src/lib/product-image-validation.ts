@@ -4,6 +4,12 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
 ]);
 const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const IMAGE_CONTENT_TYPES_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
 
 export const MAX_PRODUCT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -24,6 +30,16 @@ export function sanitizeProductImageFileName(fileName: string) {
     .replace(/^-|-$/g, "");
 
   return `${baseName || "product-image"}.${extension}`;
+}
+
+export function getProductImageContentType(fileName: string, contentType: string) {
+  const extension = getProductImageExtension(fileName);
+
+  if (!extension) {
+    return contentType;
+  }
+
+  return IMAGE_CONTENT_TYPES_BY_EXTENSION[extension] ?? contentType;
 }
 
 export function parseAdminProductImageUrl(value: string | null | undefined) {

@@ -82,7 +82,14 @@ export function ProductForm({
       URL.revokeObjectURL(imagePreview);
     }
 
-    setImagePreview(URL.createObjectURL(file));
+    try {
+      setImagePreview(URL.createObjectURL(file));
+    } catch {
+      setError("Uploaded image: Image upload failed. Please try another file.");
+      event.target.value = "";
+      setSelectedFile(null);
+      setImagePreview(primaryImage ?? null);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -115,11 +122,20 @@ export function ProductForm({
       payload.set("stock", String(Number(formData.get("stock") ?? 0)));
       payload.set("status", String(formData.get("status") ?? "draft"));
       payload.set("category_id", String(formData.get("category_id") ?? ""));
-      payload.set("image_url", imageUrl ?? "");
+      if (imageUrl) {
+        payload.set("image_url", imageUrl);
+      }
 
       if (selectedFile) {
         payload.set("image_file", selectedFile);
       }
+
+      console.debug("admin product submit", {
+        fields: Array.from(payload.keys()),
+        imageMode: selectedFile ? "upload" : imageUrl ? "fallback-url" : "none",
+        sendsFallbackImageUrl: payload.has("image_url"),
+        sendsUploadedImage: payload.has("image_file"),
+      });
 
       const response = await fetch(
         product ? `/api/admin/products/${product.id}` : "/api/admin/products",
@@ -128,10 +144,23 @@ export function ProductForm({
           body: payload,
         },
       );
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as {
+        error?: string;
+        field?: "uploadedImage" | "imageUrl" | "slug" | "unknown";
+      };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Unable to save product.");
+        const fieldLabel =
+          result.field === "uploadedImage"
+            ? "Uploaded image"
+            : result.field === "imageUrl"
+              ? "Image URL"
+              : result.field === "slug"
+                ? "Slug"
+                : null;
+        const message = result.error ?? "Unable to save product.";
+
+        throw new Error(fieldLabel ? `${fieldLabel}: ${message}` : message);
       }
 
       router.push("/admin/products");

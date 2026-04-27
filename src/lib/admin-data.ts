@@ -233,7 +233,7 @@ export async function createAdminProduct(input: AdminProductInput) {
     });
 
     if (imageError) {
-      throw new Error("Image upload failed");
+      throw new Error("Product was created but image save failed");
     }
   }
 
@@ -273,7 +273,7 @@ export async function createAdminProductWithImage(
     });
 
     if (imageError) {
-      throw new Error("Image upload failed");
+      throw new Error("Product was created but image save failed");
     }
   }
 
@@ -310,7 +310,7 @@ export async function updateAdminProduct(productId: string, input: AdminProductI
       );
 
     if (imageError) {
-      throw new Error("Image upload failed");
+      throw new Error("Product image save failed");
     }
   }
 }
@@ -352,7 +352,7 @@ export async function updateAdminProductWithImage(
       );
 
     if (imageError) {
-      throw new Error("Image upload failed");
+      throw new Error("Product image save failed");
     }
   }
 }

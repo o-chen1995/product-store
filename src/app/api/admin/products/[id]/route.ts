@@ -9,9 +9,40 @@ import {
   validateAdminProductImage,
 } from "@/lib/product-image-validation";
 
+type ProductErrorField = "uploadedImage" | "imageUrl" | "slug" | "unknown";
+
 type AdminProductRouteContext = {
   params: Promise<{ id: string }>;
 };
+
+function productError(
+  error: string,
+  field: ProductErrorField = "unknown",
+  status = 400,
+) {
+  return NextResponse.json({ error, field }, { status });
+}
+
+function getProductErrorField(message: string): ProductErrorField {
+  if (
+    message.includes("Image upload failed") ||
+    message.includes("image save failed") ||
+    message.includes("Image must be") ||
+    message.includes("Image must be 5MB")
+  ) {
+    return "uploadedImage";
+  }
+
+  if (message.includes("https image URL")) {
+    return "imageUrl";
+  }
+
+  if (message.includes("Slug")) {
+    return "slug";
+  }
+
+  return "unknown";
+}
 
 export async function PUT(request: Request, { params }: AdminProductRouteContext) {
   try {
@@ -51,34 +82,31 @@ export async function PUT(request: Request, { params }: AdminProductRouteContext
     };
 
     if (!input.name) {
-      return NextResponse.json({ error: "Name is required." }, { status: 400 });
+      return productError("Name is required.");
     }
 
     if (!input.slug) {
-      return NextResponse.json({ error: "Slug is required." }, { status: 400 });
+      return productError("Slug is required.", "slug");
     }
 
     if (!input.description) {
-      return NextResponse.json({ error: "Description is required." }, { status: 400 });
+      return productError("Description is required.");
     }
 
     if (input.price < 0) {
-      return NextResponse.json({ error: "Price must be 0 or greater." }, { status: 400 });
+      return productError("Price must be 0 or greater.");
     }
 
     if (input.compare_at_price != null && input.compare_at_price < input.price) {
-      return NextResponse.json(
-        { error: "Compare at price must be greater than or equal to price." },
-        { status: 400 },
-      );
+      return productError("Compare at price must be greater than or equal to price.");
     }
 
     if (input.stock < 0) {
-      return NextResponse.json({ error: "Stock must be 0 or greater." }, { status: 400 });
+      return productError("Stock must be 0 or greater.");
     }
 
     if (!input.category_id) {
-      return NextResponse.json({ error: "Category is required." }, { status: 400 });
+      return productError("Category is required.");
     }
 
     await updateAdminProductWithImage(id, input);
@@ -88,6 +116,6 @@ export async function PUT(request: Request, { params }: AdminProductRouteContext
     const message = error instanceof Error ? error.message : "Unable to update product.";
     const status = message.includes("required") ? 401 : message.includes("Admin") ? 403 : 400;
 
-    return NextResponse.json({ error: message }, { status });
+    return productError(message, getProductErrorField(message), status);
   }
 }

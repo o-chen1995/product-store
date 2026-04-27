@@ -1,5 +1,7 @@
 import { randomUUID } from "crypto";
 import {
+  getProductImageContentType,
+  parseAdminProductImageUrl,
   sanitizeProductImageFileName,
   validateAdminProductImage,
 } from "@/lib/product-image-validation";
@@ -17,23 +19,29 @@ export async function uploadAdminProductImage(file: File, productId: string) {
   }
 
   const safeFileName = sanitizeProductImageFileName(file.name);
-  const filePath = `${productId}/${randomUUID()}-${safeFileName}`;
+  const contentType = getProductImageContentType(file.name, file.type);
+  const filePath = `${productId}/${Date.now()}-${randomUUID()}-${safeFileName}`;
+  const uploadBody = new Blob([await file.arrayBuffer()], { type: contentType });
   const { error } = await supabase.storage
     .from(PRODUCT_IMAGES_BUCKET)
-    .upload(filePath, file, {
-      contentType: file.type,
+    .upload(filePath, uploadBody, {
+      contentType,
       upsert: false,
     });
 
   if (error) {
-    throw new Error("Image upload failed");
+    throw new Error("Image upload failed. Please try another file.");
   }
 
   const { data } = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(filePath);
 
   if (!data?.publicUrl) {
-    throw new Error("Image upload failed");
+    throw new Error("Image upload failed. Please try another file.");
   }
 
-  return data.publicUrl;
+  try {
+    return parseAdminProductImageUrl(data.publicUrl);
+  } catch {
+    throw new Error("Image upload failed. Please try another file.");
+  }
 }
