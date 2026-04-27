@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { uploadAdminProductImage } from "@/lib/product-images";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const productStatusSchema = z.enum(["draft", "active", "archived"]);
@@ -47,7 +46,6 @@ export type AdminProductFormPayload = {
   status: "draft" | "active" | "archived";
   category_id: string;
   image_url: string | null;
-  image_file: File | null;
 };
 
 export type AdminOrder = {
@@ -244,7 +242,7 @@ export async function createAdminProductWithImage(
   input: AdminProductFormPayload,
 ) {
   const supabase = getSupabase();
-  const { image_file, image_url, ...productInput } = input;
+  const { image_url, ...productInput } = input;
   const { data, error } = await supabase
     .from("products")
     .insert({
@@ -260,9 +258,7 @@ export async function createAdminProductWithImage(
     throwProductSaveError(error);
   }
 
-  const publicUrl = image_file
-    ? await uploadAdminProductImage(image_file, data.id)
-    : image_url;
+  const publicUrl = image_url;
 
   if (publicUrl) {
     const { error: imageError } = await supabase.from("product_images").insert({
@@ -320,7 +316,7 @@ export async function updateAdminProductWithImage(
   input: AdminProductFormPayload,
 ) {
   const supabase = getSupabase();
-  const { image_file, image_url, ...productInput } = input;
+  const { image_url, ...productInput } = input;
   const { error } = await supabase
     .from("products")
     .update({
@@ -334,9 +330,7 @@ export async function updateAdminProductWithImage(
     throwProductSaveError(error);
   }
 
-  const publicUrl = image_file
-    ? await uploadAdminProductImage(image_file, productId)
-    : image_url;
+  const publicUrl = image_url;
 
   if (publicUrl) {
     const { error: imageError } = await supabase

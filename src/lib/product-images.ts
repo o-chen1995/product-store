@@ -4,50 +4,62 @@ import {
   parseAdminProductImageUrl,
   sanitizeProductImageFolderName,
   sanitizeProductImageFileName,
-  validateAdminProductImage,
+  validateAdminProductImageMetadata,
 } from "@/lib/product-image-validation";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const PRODUCT_IMAGES_BUCKET = "product-images";
 
-export async function uploadAdminProductImage(file: File, folderName: string) {
-  validateAdminProductImage(file);
-
+export async function createAdminProductImageUploadTarget({
+  contentType,
+  fileName,
+  folderName,
+  size,
+}: {
+  contentType: string;
+  fileName: string;
+  folderName: string;
+  size: number;
+}) {
+  validateAdminProductImageMetadata({ contentType, fileName, size });
   const supabase = createServiceRoleSupabaseClient();
 
   if (!supabase) {
-    throw new Error("Supabase storage upload is not configured.");
+    throw new Error("Could not prepare image upload.");
   }
 
-  const safeFileName = sanitizeProductImageFileName(file.name);
-  const contentType = getProductImageContentType(file.name, file.type);
+  const { error: bucketError } = await supabase.storage.getBucket(PRODUCT_IMAGES_BUCKET);
+
+  if (bucketError) {
+    throw new Error("Product image bucket is not configured.");
+  }
+
+  const safeFileName = sanitizeProductImageFileName(fileName);
+  const normalizedContentType = getProductImageContentType(fileName, contentType);
   const safeFolderName = sanitizeProductImageFolderName(folderName);
   const filePath = `${safeFolderName}/${Date.now()}-${randomUUID()}-${safeFileName}`;
-  const uploadBody = new Blob([await file.arrayBuffer()], { type: contentType });
-  const { error } = await supabase.storage
+  const { data: signedUpload, error: signedUploadError } = await supabase.storage
     .from(PRODUCT_IMAGES_BUCKET)
-    .upload(filePath, uploadBody, {
-      contentType,
-      upsert: false,
-    });
+    .createSignedUploadUrl(filePath, { upsert: false });
 
-  if (error) {
-    throw new Error(
-      error.message.includes("Bucket not found")
-        ? "Image upload failed. Bucket product-images was not found."
-        : "Image upload failed. Please try another file.",
-    );
+  if (signedUploadError || !signedUpload?.token) {
+    throw new Error("Could not prepare image upload.");
   }
 
   const { data } = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(filePath);
 
   if (!data?.publicUrl) {
-    throw new Error("Image upload failed. Please try another file.");
+    throw new Error("Could not prepare image upload.");
   }
 
   try {
-    return parseAdminProductImageUrl(data.publicUrl);
+    return {
+      path: signedUpload.path,
+      publicUrl: parseAdminProductImageUrl(data.publicUrl),
+      token: signedUpload.token,
+      contentType: normalizedContentType,
+    };
   } catch {
-    throw new Error("Image upload failed. Please try another file.");
+    throw new Error("Could not prepare image upload.");
   }
 }

@@ -66,7 +66,6 @@ export async function POST(request: Request) {
         | "archived",
       category_id: String(formData.get("category_id") ?? ""),
       image_url: parseAdminProductImageUrl(String(formData.get("image_url") ?? "")),
-      image_file: null,
     };
 
     if (!input.name) {

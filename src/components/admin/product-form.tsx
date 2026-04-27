@@ -9,12 +9,14 @@ import {
   parseAdminProductImageUrl,
   validateAdminProductImage,
 } from "@/lib/product-image-validation";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const fieldClassName = "mt-2 block text-sm font-medium leading-6 text-slate-700";
 const selectClassName =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 const textareaClassName =
   "flex min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+const productImagesBucket = "product-images";
 
 function centsToDollars(cents: number | null | undefined) {
   if (cents == null) {
@@ -25,24 +27,48 @@ function centsToDollars(cents: number | null | undefined) {
 }
 
 async function uploadProductImage(file: File, folder: string) {
-  const uploadPayload = new FormData();
-  uploadPayload.set("image_file", file);
-  uploadPayload.set("folder", folder);
+  validateAdminProductImage(file);
 
-  const response = await fetch("/api/admin/product-images/upload", {
+  const response = await fetch("/api/admin/product-images/create-upload-url", {
     method: "POST",
-    body: uploadPayload,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contentType: file.type,
+      fileName: file.name,
+      folder,
+      size: file.size,
+    }),
   });
   const result = (await response.json()) as {
+    path?: string;
     publicUrl?: string;
+    token?: string;
     error?: string;
     field?: "uploadedImage";
   };
 
-  if (!response.ok || !result.publicUrl) {
+  if (!response.ok || !result.path || !result.publicUrl || !result.token) {
     throw new Error(
-      `Uploaded image: ${result.error ?? "Image upload failed. Please try another file."}`,
+      `Uploaded image: ${result.error ?? "Could not prepare image upload."}`,
     );
+  }
+
+  const supabase = createBrowserSupabaseClient();
+
+  if (!supabase) {
+    throw new Error("Uploaded image: Image upload failed. Please try another file.");
+  }
+
+  const { error: uploadError } = await supabase.storage
+    .from(productImagesBucket)
+    .uploadToSignedUrl(result.path, result.token, file, {
+      contentType: file.type,
+    });
+
+  if (uploadError) {
+    throw new Error("Uploaded image: Image upload failed. Please try another file.");
   }
 
   return parseAdminProductImageUrl(result.publicUrl);
@@ -90,8 +116,8 @@ export function ProductForm({
     } catch (validationError) {
       setError(
         validationError instanceof Error
-          ? validationError.message
-          : "Invalid image file.",
+          ? `Uploaded image: ${validationError.message}`
+          : "Uploaded image: Image upload failed. Please try another file.",
       );
       event.target.value = "";
       setSelectedFile(null);

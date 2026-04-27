@@ -53,6 +53,26 @@ export function getProductImageContentType(fileName: string, contentType: string
   return IMAGE_CONTENT_TYPES_BY_EXTENSION[extension] ?? contentType;
 }
 
+export function validateAdminProductImageMetadata({
+  contentType,
+  fileName,
+  size,
+}: {
+  contentType: string;
+  fileName: string;
+  size: number;
+}) {
+  const extension = getProductImageExtension(fileName);
+
+  if (!extension || !ALLOWED_IMAGE_TYPES.has(contentType)) {
+    throw new Error("Only JPG, PNG, and WEBP images are supported.");
+  }
+
+  if (size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
+    throw new Error("Image must be smaller than 5MB.");
+  }
+}
+
 export function parseAdminProductImageUrl(value: string | null | undefined) {
   const imageUrl = value?.trim() ?? "";
 
@@ -81,10 +101,10 @@ export function validateAdminProductImage(file: File | null) {
   const extension = getProductImageExtension(file.name);
 
   if (!extension || (file.type && !ALLOWED_IMAGE_TYPES.has(file.type))) {
-    throw new Error("Image must be JPG, JPEG, PNG, or WEBP.");
+    throw new Error("Only JPG, PNG, and WEBP images are supported.");
   }
 
   if (file.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
-    throw new Error("Image must be 5MB or smaller.");
+    throw new Error("Image must be smaller than 5MB.");
   }
 }
