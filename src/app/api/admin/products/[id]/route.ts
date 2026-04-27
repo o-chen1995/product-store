@@ -13,6 +13,12 @@ type AdminProductRouteContext = {
   params: Promise<{ id: string }>;
 };
 
+function getOptionalImageUrl(formData: FormData) {
+  const imageUrl = formData.get("imageUrl") ?? formData.get("image_url");
+
+  return parseAdminProductImageUrl(typeof imageUrl === "string" ? imageUrl : "");
+}
+
 function productError(
   error: string,
   field: ProductErrorField = "unknown",
@@ -69,7 +75,7 @@ export async function PUT(request: Request, { params }: AdminProductRouteContext
         | "active"
         | "archived",
       category_id: String(formData.get("category_id") ?? ""),
-      image_url: parseAdminProductImageUrl(String(formData.get("image_url") ?? "")),
+      image_url: getOptionalImageUrl(formData),
     };
 
     if (!input.name) {

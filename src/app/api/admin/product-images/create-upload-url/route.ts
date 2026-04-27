@@ -5,7 +5,7 @@ import { createAdminProductImageUploadTarget } from "@/lib/product-images";
 
 const createUploadUrlSchema = z.object({
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
-  fileName: z.string().trim().min(1),
+  filename: z.string().trim().min(1),
   folder: z.string().trim().optional(),
   size: z.number().int().positive(),
 });
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const input = createUploadUrlSchema.parse(await request.json());
     const uploadTarget = await createAdminProductImageUploadTarget({
       contentType: input.contentType,
-      fileName: input.fileName,
+      fileName: input.filename,
       folderName: input.folder ?? "product-image",
       size: input.size,
     });

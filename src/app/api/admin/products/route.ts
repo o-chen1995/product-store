@@ -16,6 +16,12 @@ function toNumber(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getOptionalImageUrl(formData: FormData) {
+  const imageUrl = formData.get("imageUrl") ?? formData.get("image_url");
+
+  return parseAdminProductImageUrl(typeof imageUrl === "string" ? imageUrl : "");
+}
+
 function productError(
   error: string,
   field: ProductErrorField = "unknown",
@@ -66,7 +72,7 @@ export async function POST(request: Request) {
         | "active"
         | "archived",
       category_id: String(formData.get("category_id") ?? ""),
-      image_url: parseAdminProductImageUrl(String(formData.get("image_url") ?? "")),
+      image_url: getOptionalImageUrl(formData),
     };
 
     if (!input.name) {

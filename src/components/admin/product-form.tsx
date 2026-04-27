@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AdminCategory, AdminProduct } from "@/lib/admin-data";
 import {
+  getProductImageContentType,
   parseAdminProductImageUrl,
   validateAdminProductImage,
 } from "@/lib/product-image-validation";
@@ -18,6 +19,20 @@ const textareaClassName =
   "flex min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 const productImagesBucket = "product-images";
 
+type SaveProductStage =
+  | "validate-form"
+  | "create-upload-url"
+  | "upload-to-supabase"
+  | "create-product"
+  | "update-product"
+  | "unknown";
+
+type UploadTarget = {
+  path: string;
+  publicUrl: string;
+  token: string;
+};
+
 function centsToDollars(cents: number | null | undefined) {
   if (cents == null) {
     return "";
@@ -26,8 +41,51 @@ function centsToDollars(cents: number | null | undefined) {
   return (cents / 100).toFixed(2);
 }
 
-async function uploadProductImage(file: File, folder: string) {
-  validateAdminProductImage(file);
+function getStageErrorMessage(stage: SaveProductStage, error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : "";
+
+  if (stage === "validate-form") {
+    if (rawMessage.includes("https image URL")) {
+      return "Form validation failed: Image URL fallback must be a valid https URL.";
+    }
+
+    return rawMessage
+      ? `Form validation failed: ${rawMessage}`
+      : "Form validation failed.";
+  }
+
+  if (stage === "create-upload-url") {
+    if (rawMessage.includes("Product image bucket is not configured")) {
+      return "Could not prepare image upload: Product image bucket is not configured.";
+    }
+
+    return "Could not prepare image upload.";
+  }
+
+  if (stage === "upload-to-supabase") {
+    return "Image upload failed.";
+  }
+
+  if (stage === "create-product") {
+    return rawMessage && !rawMessage.includes("expected pattern")
+      ? `Product creation failed: ${rawMessage}`
+      : "Product creation failed.";
+  }
+
+  if (stage === "update-product") {
+    return rawMessage && !rawMessage.includes("expected pattern")
+      ? `Product update failed: ${rawMessage}`
+      : "Product update failed.";
+  }
+
+  return "Unknown error while saving product.";
+}
+
+async function createProductImageUploadTarget(
+  file: File,
+  folder: string,
+): Promise<UploadTarget> {
+  const contentType = getProductImageContentType(file.name, file.type);
 
   const response = await fetch("/api/admin/product-images/create-upload-url", {
     method: "POST",
@@ -35,8 +93,8 @@ async function uploadProductImage(file: File, folder: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      contentType: file.type,
-      fileName: file.name,
+      contentType,
+      filename: file.name,
       folder,
       size: file.size,
     }),
@@ -50,28 +108,33 @@ async function uploadProductImage(file: File, folder: string) {
   };
 
   if (!response.ok || !result.path || !result.publicUrl || !result.token) {
-    throw new Error(
-      `Uploaded image: ${result.error ?? "Could not prepare image upload."}`,
-    );
+    throw new Error(result.error ?? "Could not prepare image upload.");
   }
 
+  return {
+    path: result.path,
+    publicUrl: parseAdminProductImageUrl(result.publicUrl) ?? "",
+    token: result.token,
+  };
+}
+
+async function uploadProductImageToSupabase(target: UploadTarget, file: File) {
   const supabase = createBrowserSupabaseClient();
+  const contentType = getProductImageContentType(file.name, file.type);
 
   if (!supabase) {
-    throw new Error("Uploaded image: Image upload failed. Please try another file.");
+    throw new Error("Image upload failed.");
   }
 
   const { error: uploadError } = await supabase.storage
     .from(productImagesBucket)
-    .uploadToSignedUrl(result.path, result.token, file, {
-      contentType: file.type,
+    .uploadToSignedUrl(target.path, target.token, file, {
+      contentType,
     });
 
   if (uploadError) {
-    throw new Error("Uploaded image: Image upload failed. Please try another file.");
+    throw new Error("Image upload failed.");
   }
-
-  return parseAdminProductImageUrl(result.publicUrl);
 }
 
 export function ProductForm({
@@ -154,14 +217,36 @@ export function ProductForm({
       ? Math.round(Number(compareAtPriceValue) * 100)
       : null;
     let imageUrl: string | null = null;
+    let stage: SaveProductStage = "validate-form";
 
     try {
+      console.debug("admin product save stage", stage);
+      validateAdminProductImage(selectedFile);
       imageUrl = selectedFile
-        ? await uploadProductImage(
-            selectedFile,
-            product?.id || String(formData.get("slug") ?? "product-image"),
-          )
+        ? null
         : parseAdminProductImageUrl(String(formData.get("image_url") ?? ""));
+
+      if (selectedFile) {
+        stage = "create-upload-url";
+        console.debug("admin product save stage", stage);
+        const uploadTarget = await createProductImageUploadTarget(
+          selectedFile,
+          product?.id || String(formData.get("slug") ?? "product-image"),
+        );
+        console.debug("admin product image upload target", {
+          hasPath: Boolean(uploadTarget.path),
+          hasPublicUrl: Boolean(uploadTarget.publicUrl),
+          hasToken: Boolean(uploadTarget.token),
+        });
+
+        stage = "upload-to-supabase";
+        console.debug("admin product save stage", stage);
+        await uploadProductImageToSupabase(uploadTarget, selectedFile);
+        imageUrl = uploadTarget.publicUrl;
+        console.debug("admin product image uploaded", {
+          hasPublicUrl: Boolean(imageUrl),
+        });
+      }
 
       const payload = new FormData();
       payload.set("name", String(formData.get("name") ?? ""));
@@ -176,16 +261,18 @@ export function ProductForm({
       payload.set("status", String(formData.get("status") ?? "draft"));
       payload.set("category_id", String(formData.get("category_id") ?? ""));
       if (imageUrl) {
-        payload.set("image_url", imageUrl);
+        payload.set("imageUrl", imageUrl);
       }
 
       console.debug("admin product submit", {
         fields: Array.from(payload.keys()),
         imageMode: selectedFile ? "upload" : imageUrl ? "fallback-url" : "none",
-        sendsFallbackImageUrl: payload.has("image_url"),
+        sendsFallbackImageUrl: payload.has("imageUrl"),
         sendsUploadedImage: false,
       });
 
+      stage = product ? "update-product" : "create-product";
+      console.debug("admin product save stage", stage);
       const response = await fetch(
         product ? `/api/admin/products/${product.id}` : "/api/admin/products",
         {
@@ -199,25 +286,13 @@ export function ProductForm({
       };
 
       if (!response.ok) {
-        const fieldLabel =
-          result.field === "uploadedImage"
-            ? "Uploaded image"
-            : result.field === "imageUrl"
-              ? "Image URL"
-              : result.field === "slug"
-                ? "Slug"
-                : null;
-        const message = result.error ?? "Unable to save product.";
-
-        throw new Error(fieldLabel ? `${fieldLabel}: ${message}` : message);
+        throw new Error(result.error ?? "Unable to save product.");
       }
 
       router.push("/admin/products");
       router.refresh();
     } catch (submitError) {
-      setError(
-        submitError instanceof Error ? submitError.message : "Unable to save product.",
-      );
+      setError(getStageErrorMessage(stage, submitError));
       setIsSubmitting(false);
     }
   }
