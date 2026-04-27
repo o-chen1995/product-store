@@ -105,6 +105,20 @@ function getSupabase() {
   return supabase;
 }
 
+function throwProductSaveError(
+  error: { code?: string; message?: string } | null,
+): never {
+  if (error?.code === "23505" && error.message?.includes("products_slug_key")) {
+    throw new Error("Slug already exists.");
+  }
+
+  if (error?.code === "23514" && error.message?.includes("compare_at_price")) {
+    throw new Error("Compare at price must be greater than or equal to price.");
+  }
+
+  throw new Error("Unable to save product.");
+}
+
 export async function getAdminDashboardStats() {
   const supabase = getSupabase();
   const [
@@ -207,7 +221,7 @@ export async function createAdminProduct(input: AdminProductInput) {
     .single();
 
   if (error || !data) {
-    throw new Error("Unable to create product.");
+    throwProductSaveError(error);
   }
 
   if (image_url) {
@@ -219,7 +233,7 @@ export async function createAdminProduct(input: AdminProductInput) {
     });
 
     if (imageError) {
-      throw new Error("Product was created, but image could not be saved.");
+      throw new Error("Image upload failed");
     }
   }
 
@@ -243,7 +257,7 @@ export async function createAdminProductWithImage(
     .single();
 
   if (error || !data) {
-    throw new Error("Unable to create product.");
+    throwProductSaveError(error);
   }
 
   const publicUrl = image_file
@@ -259,7 +273,7 @@ export async function createAdminProductWithImage(
     });
 
     if (imageError) {
-      throw new Error("Product was created, but image could not be saved.");
+      throw new Error("Image upload failed");
     }
   }
 
@@ -279,7 +293,7 @@ export async function updateAdminProduct(productId: string, input: AdminProductI
     .eq("id", productId);
 
   if (error) {
-    throw new Error("Unable to update product.");
+    throwProductSaveError(error);
   }
 
   if (image_url) {
@@ -296,7 +310,7 @@ export async function updateAdminProduct(productId: string, input: AdminProductI
       );
 
     if (imageError) {
-      throw new Error("Product was updated, but image could not be saved.");
+      throw new Error("Image upload failed");
     }
   }
 }
@@ -317,7 +331,7 @@ export async function updateAdminProductWithImage(
     .eq("id", productId);
 
   if (error) {
-    throw new Error("Unable to update product.");
+    throwProductSaveError(error);
   }
 
   const publicUrl = image_file
@@ -338,7 +352,7 @@ export async function updateAdminProductWithImage(
       );
 
     if (imageError) {
-      throw new Error("Product was updated, but image could not be saved.");
+      throw new Error("Image upload failed");
     }
   }
 }

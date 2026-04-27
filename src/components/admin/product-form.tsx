@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AdminCategory, AdminProduct } from "@/lib/admin-data";
-import { validateAdminProductImage } from "@/lib/product-image-validation";
+import {
+  parseAdminProductImageUrl,
+  validateAdminProductImage,
+} from "@/lib/product-image-validation";
 
 const fieldClassName = "mt-2 block text-sm font-medium leading-6 text-slate-700";
 const selectClassName =
@@ -93,9 +96,13 @@ export function ProductForm({
     const compareAtPrice = compareAtPriceValue
       ? Math.round(Number(compareAtPriceValue) * 100)
       : null;
-    const imageUrl = String(formData.get("image_url") ?? "").trim();
+    let imageUrl: string | null = null;
 
     try {
+      imageUrl = selectedFile
+        ? null
+        : parseAdminProductImageUrl(String(formData.get("image_url") ?? ""));
+
       const payload = new FormData();
       payload.set("name", String(formData.get("name") ?? ""));
       payload.set("slug", String(formData.get("slug") ?? ""));
@@ -108,7 +115,7 @@ export function ProductForm({
       payload.set("stock", String(Number(formData.get("stock") ?? 0)));
       payload.set("status", String(formData.get("status") ?? "draft"));
       payload.set("category_id", String(formData.get("category_id") ?? ""));
-      payload.set("image_url", imageUrl);
+      payload.set("image_url", imageUrl ?? "");
 
       if (selectedFile) {
         payload.set("image_file", selectedFile);
