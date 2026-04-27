@@ -4,10 +4,7 @@ import {
   updateAdminProductWithImage,
 } from "@/lib/admin-data";
 import { requireAdminFromRequest } from "@/lib/admin";
-import {
-  parseAdminProductImageUrl,
-  validateAdminProductImage,
-} from "@/lib/product-image-validation";
+import { parseAdminProductImageUrl } from "@/lib/product-image-validation";
 
 type ProductErrorField = "uploadedImage" | "imageUrl" | "slug" | "unknown";
 
@@ -49,10 +46,6 @@ export async function PUT(request: Request, { params }: AdminProductRouteContext
     await requireAdminFromRequest(request);
     const { id } = await params;
     const formData = await request.formData();
-    const imageFile = formData.get("image_file");
-    const file = imageFile instanceof File && imageFile.size > 0 ? imageFile : null;
-
-    validateAdminProductImage(file);
 
     const toNumber = (value: FormDataEntryValue | null) => {
       const parsed = Number(value ?? 0);
@@ -75,10 +68,8 @@ export async function PUT(request: Request, { params }: AdminProductRouteContext
         | "active"
         | "archived",
       category_id: String(formData.get("category_id") ?? ""),
-      image_url: file
-        ? null
-        : parseAdminProductImageUrl(String(formData.get("image_url") ?? "")),
-      image_file: file,
+      image_url: parseAdminProductImageUrl(String(formData.get("image_url") ?? "")),
+      image_file: null,
     };
 
     if (!input.name) {

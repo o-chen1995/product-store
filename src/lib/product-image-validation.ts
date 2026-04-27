@@ -32,6 +32,17 @@ export function sanitizeProductImageFileName(fileName: string) {
   return `${baseName || "product-image"}.${extension}`;
 }
 
+export function sanitizeProductImageFolderName(folderName: string) {
+  return (
+    folderName
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "product-image"
+  );
+}
+
 export function getProductImageContentType(fileName: string, contentType: string) {
   const extension = getProductImageExtension(fileName);
 

@@ -24,6 +24,30 @@ function centsToDollars(cents: number | null | undefined) {
   return (cents / 100).toFixed(2);
 }
 
+async function uploadProductImage(file: File, folder: string) {
+  const uploadPayload = new FormData();
+  uploadPayload.set("image_file", file);
+  uploadPayload.set("folder", folder);
+
+  const response = await fetch("/api/admin/product-images/upload", {
+    method: "POST",
+    body: uploadPayload,
+  });
+  const result = (await response.json()) as {
+    publicUrl?: string;
+    error?: string;
+    field?: "uploadedImage";
+  };
+
+  if (!response.ok || !result.publicUrl) {
+    throw new Error(
+      `Uploaded image: ${result.error ?? "Image upload failed. Please try another file."}`,
+    );
+  }
+
+  return parseAdminProductImageUrl(result.publicUrl);
+}
+
 export function ProductForm({
   categories,
   product,
@@ -107,7 +131,10 @@ export function ProductForm({
 
     try {
       imageUrl = selectedFile
-        ? null
+        ? await uploadProductImage(
+            selectedFile,
+            product?.id || String(formData.get("slug") ?? "product-image"),
+          )
         : parseAdminProductImageUrl(String(formData.get("image_url") ?? ""));
 
       const payload = new FormData();
@@ -126,15 +153,11 @@ export function ProductForm({
         payload.set("image_url", imageUrl);
       }
 
-      if (selectedFile) {
-        payload.set("image_file", selectedFile);
-      }
-
       console.debug("admin product submit", {
         fields: Array.from(payload.keys()),
         imageMode: selectedFile ? "upload" : imageUrl ? "fallback-url" : "none",
         sendsFallbackImageUrl: payload.has("image_url"),
-        sendsUploadedImage: payload.has("image_file"),
+        sendsUploadedImage: false,
       });
 
       const response = await fetch(

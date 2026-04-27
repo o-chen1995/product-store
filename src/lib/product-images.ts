@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import {
   getProductImageContentType,
   parseAdminProductImageUrl,
+  sanitizeProductImageFolderName,
   sanitizeProductImageFileName,
   validateAdminProductImage,
 } from "@/lib/product-image-validation";
@@ -9,7 +10,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const PRODUCT_IMAGES_BUCKET = "product-images";
 
-export async function uploadAdminProductImage(file: File, productId: string) {
+export async function uploadAdminProductImage(file: File, folderName: string) {
   validateAdminProductImage(file);
 
   const supabase = createServiceRoleSupabaseClient();
@@ -20,7 +21,8 @@ export async function uploadAdminProductImage(file: File, productId: string) {
 
   const safeFileName = sanitizeProductImageFileName(file.name);
   const contentType = getProductImageContentType(file.name, file.type);
-  const filePath = `${productId}/${Date.now()}-${randomUUID()}-${safeFileName}`;
+  const safeFolderName = sanitizeProductImageFolderName(folderName);
+  const filePath = `${safeFolderName}/${Date.now()}-${randomUUID()}-${safeFileName}`;
   const uploadBody = new Blob([await file.arrayBuffer()], { type: contentType });
   const { error } = await supabase.storage
     .from(PRODUCT_IMAGES_BUCKET)
@@ -30,7 +32,11 @@ export async function uploadAdminProductImage(file: File, productId: string) {
     });
 
   if (error) {
-    throw new Error("Image upload failed. Please try another file.");
+    throw new Error(
+      error.message.includes("Bucket not found")
+        ? "Image upload failed. Bucket product-images was not found."
+        : "Image upload failed. Please try another file.",
+    );
   }
 
   const { data } = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(filePath);
