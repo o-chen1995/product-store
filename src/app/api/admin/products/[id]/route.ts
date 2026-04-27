@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import {
   type AdminProductFormPayload,
   updateAdminProductWithImage,
@@ -100,6 +101,9 @@ export async function PUT(request: Request, { params }: AdminProductRouteContext
     }
 
     await updateAdminProductWithImage(id, input);
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/products/${input.slug}`);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

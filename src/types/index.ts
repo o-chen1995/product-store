@@ -9,6 +9,10 @@ export type Product = {
   highlights: string[];
   badge?: string;
   imageUrl?: string | null;
+  images?: Array<{
+    imageUrl: string;
+    sortOrder: number;
+  }>;
   imageAlt: string;
   accent: {
     from: string;

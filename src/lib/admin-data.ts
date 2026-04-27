@@ -225,10 +225,10 @@ export async function createAdminProduct(input: AdminProductInput) {
   if (image_url) {
     const { error: imageError } = await supabase.from("product_images").insert({
       product_id: data.id,
-      image_url,
-      alt_text: input.name,
-      sort_order: 10,
-    });
+	      image_url,
+	      alt_text: input.name,
+	      sort_order: 0,
+	    });
 
     if (imageError) {
       throw new Error("Product was created but image save failed");
@@ -263,10 +263,10 @@ export async function createAdminProductWithImage(
   if (publicUrl) {
     const { error: imageError } = await supabase.from("product_images").insert({
       product_id: data.id,
-      image_url: publicUrl,
-      alt_text: input.name,
-      sort_order: 10,
-    });
+	      image_url: publicUrl,
+	      alt_text: input.name,
+	      sort_order: 0,
+	    });
 
     if (imageError) {
       throw new Error("Product was created but image save failed");
@@ -298,10 +298,10 @@ export async function updateAdminProduct(productId: string, input: AdminProductI
       .upsert(
         {
           product_id: productId,
-          image_url,
-          alt_text: input.name,
-          sort_order: 10,
-        },
+	          image_url,
+	          alt_text: input.name,
+	          sort_order: 0,
+	        },
         { onConflict: "product_id,sort_order" },
       );
 
@@ -338,10 +338,10 @@ export async function updateAdminProductWithImage(
       .upsert(
         {
           product_id: productId,
-          image_url: publicUrl,
-          alt_text: input.name,
-          sort_order: 10,
-        },
+	          image_url: publicUrl,
+	          alt_text: input.name,
+	          sort_order: 0,
+	        },
         { onConflict: "product_id,sort_order" },
       );
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import {
   createAdminProductWithImage,
@@ -97,6 +98,9 @@ export async function POST(request: Request) {
     }
 
     const productId = await createAdminProductWithImage(input);
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/products/${input.slug}`);
 
     return NextResponse.json({ productId }, { status: 201 });
   } catch (error) {

@@ -20,8 +20,14 @@ type ProductRow = {
   categories: { name: string } | { name: string }[] | null;
 };
 
+function getSortedProductImages(productImages: ProductRow["product_images"]) {
+  return [...(productImages ?? [])]
+    .filter((image) => image.image_url)
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
+
 function getPrimaryImageUrl(productImages: ProductRow["product_images"]) {
-  return productImages?.sort((a, b) => a.sort_order - b.sort_order)[0]?.image_url ?? null;
+  return getSortedProductImages(productImages)[0]?.image_url ?? null;
 }
 
 function getCategoryName(categories: ProductRow["categories"]) {
@@ -33,6 +39,8 @@ function getCategoryName(categories: ProductRow["categories"]) {
 }
 
 function mapProductRow(row: ProductRow): Product {
+  const sortedImages = getSortedProductImages(row.product_images);
+
   return {
     id: row.id,
     slug: row.slug,
@@ -49,6 +57,10 @@ function mapProductRow(row: ProductRow): Product {
       to: row.accent_to ?? "#415f4a",
     },
     imageUrl: getPrimaryImageUrl(row.product_images),
+    images: sortedImages.map((image) => ({
+      imageUrl: image.image_url,
+      sortOrder: image.sort_order,
+    })),
     inventory: row.stock,
     featured: row.featured ?? false,
   };

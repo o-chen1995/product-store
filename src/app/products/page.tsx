@@ -1,6 +1,9 @@
 import { ProductCard } from "@/components/product-card";
 import { getProducts } from "@/lib/products";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "Products",
   description: "Browse the Northline Goods product catalog.",
